@@ -8,15 +8,27 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Static export for Capacitor APK
-  output: 'export',
+  // Allow access to remote image placeholder.
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+        port: '',
+        pathname: '/**', // This allows any path under the hostname
+      },
+    ],
   },
+  output: 'standalone',
   transpilePackages: ['motion'],
-  // Disable webpack caching to avoid snapshot errors
-  webpack: (config) => {
-    config.cache = false;
+  webpack: (config, {dev}) => {
+    // HMR is disabled in AI Studio via DISABLE_HMR env var.
+    // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+    if (dev && process.env.DISABLE_HMR === 'true') {
+      config.watchOptions = {
+        ignored: /.*/,
+      };
+    }
     return config;
   },
 };
