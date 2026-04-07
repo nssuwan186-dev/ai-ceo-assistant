@@ -21,7 +21,6 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lightningcss": "^1.32.0",
-    "lightningcss-android-arm64": "^1.32.0",
     "lucide-react": "^0.553.0",
     "motion": "^12.23.24",
     "next": "^15.4.9",
@@ -29,6 +28,9 @@
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "tailwind-merge": "^3.3.1"
+  },
+  "optionalDependencies": {
+    "lightningcss-android-arm64": "^1.32.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.11",
