@@ -20,11 +20,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
 
       - name: Install all dependencies
         run: |
-          npm ci --ignore-scripts || npm install
+          npm install
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Next.js static export
@@ -42,16 +41,15 @@ jobs:
           cmdline-tools-version: 11076708
           packages: platforms;android-34 build-tools;34.0.0
 
-      - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
-
-      - name: Add Android platform
+      - name: Add Android platform and copy assets
         run: |
+          echo "=== Checking out/ directory ==="
+          ls -la out/ | head -15
           rm -rf android
           npx cap add android
-
-      - name: Sync Capacitor
-        run: npx cap sync android
+          npx cap copy android
+          echo "=== After cap copy ==="
+          ls -la android/app/src/main/assets/public/ | head -10
 
       - name: Build APK
         run: |
