@@ -11,7 +11,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // ============================================================
-// API Configuration
+// การตั้งค่า API
 // ============================================================
 const DEFAULT_API_URL = 'https://your-api-domain.com';
 
@@ -24,7 +24,7 @@ function getApiUrl(): string {
 }
 
 // ============================================================
-// Types
+// ประเภทข้อมูล
 // ============================================================
 interface Tenant {
   id: number | string;
@@ -45,7 +45,7 @@ interface Room {
 }
 
 // ============================================================
-// API Helpers
+// ฟังก์ชันเรียก API
 // ============================================================
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${getApiUrl()}/api/v1${path}`;
@@ -53,7 +53,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) throw new Error(`API ผิดพลาด: ${res.status}`);
   return res.json();
 }
 
@@ -86,7 +86,7 @@ async function seedData(): Promise<void> {
 }
 
 // ============================================================
-// Main App
+// แอพหลัก
 // ============================================================
 export default function ResortApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -106,12 +106,12 @@ export default function ResortApp() {
     rooms.length > 0
       ? rooms.map(r => ({ id: r.room_id, type: r.room_type, price: r.price }))
       : [
-          { id: 'A101', type: 'Standard', price: 3500 }, { id: 'A102', type: 'Standard', price: 3500 },
-          { id: 'A103', type: 'Standard', price: 3500 }, { id: 'A104', type: 'Standard', price: 3500 },
-          { id: 'B104', type: 'Deluxe', price: 4500 }, { id: 'B106', type: 'Deluxe', price: 4500 },
-          { id: 'B107', type: 'Deluxe', price: 4500 }, { id: 'B108', type: 'Deluxe', price: 4500 },
-          { id: 'B109', type: 'Deluxe', price: 4500 }, { id: 'B110', type: 'Deluxe', price: 4500 },
-          { id: 'N3', type: 'Standard', price: 3000 },
+          { id: 'A101', type: 'สแตนดาร์ด', price: 3500 }, { id: 'A102', type: 'สแตนดาร์ด', price: 3500 },
+          { id: 'A103', type: 'สแตนดาร์ด', price: 3500 }, { id: 'A104', type: 'สแตนดาร์ด', price: 3500 },
+          { id: 'B104', type: 'ดีลักซ์', price: 4500 }, { id: 'B106', type: 'ดีลักซ์', price: 4500 },
+          { id: 'B107', type: 'ดีลักซ์', price: 4500 }, { id: 'B108', type: 'ดีลักซ์', price: 4500 },
+          { id: 'B109', type: 'ดีลักซ์', price: 4500 }, { id: 'B110', type: 'ดีลักซ์', price: 4500 },
+          { id: 'N3', type: 'สแตนดาร์ด', price: 3000 },
         ], [rooms]);
 
   const loadData = useCallback(async (search?: string) => {
@@ -142,8 +142,7 @@ export default function ResortApp() {
 
   const filteredData = useMemo(() =>
     tenants.filter(item =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.room.toLowerCase().includes(searchQuery.toLowerCase())
+      item.name.includes(searchQuery) || item.room.includes(searchQuery)
     ), [searchQuery, tenants]);
 
   const reportData = useMemo(() =>
@@ -169,7 +168,7 @@ export default function ResortApp() {
       if (editingTenant) {
         await updateTenant(editingTenant.id, { ...formData, time: timeStr });
       } else {
-        await createTenant({ ...formData, time: timeStr, status: 'occupied' });
+        await createTenant({ ...formData, time: timeStr, status: 'checked_in' });
       }
       loadData(searchQuery);
       setIsCheckInModalOpen(false);
@@ -180,7 +179,7 @@ export default function ResortApp() {
 
   const handleDeleteTenant = async (id: number | string) => {
     if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลผู้เช่านี้?')) {
-      try { await deleteTenant(id); loadData(searchQuery); } catch { alert('เกิดข้อผิดพลาด'); }
+      try { await deleteTenant(id); loadData(searchQuery); } catch { alert('เกิดข้อผิดพลาดในการลบข้อมูล'); }
     }
   };
 
@@ -193,26 +192,26 @@ export default function ResortApp() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Time', 'Name', 'Phone', 'Room', 'Status'];
-    const rows = reportData.map(i => [i.date, i.time, i.name, i.phone, i.room, i.status]);
+    const headers = ['วันที่', 'เวลา', 'ชื่อ', 'เบอร์โทร', 'ห้อง', 'สถานะ'];
+    const rows = reportData.map(i => [i.date, i.time, i.name, i.phone, i.room, i.status === 'occupied' ? 'มีผู้เช่า' : 'ว่าง']);
     const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `resort_report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `รายงานผู้เช่า_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text('Resort Manager - Tenant Report', 14, 22);
+    doc.text('ระบบจัดการรีสอร์ท - รายงานผู้เช่า', 14, 22);
     autoTable(doc, {
-      head: [['Date', 'Time', 'Name', 'Phone', 'Room', 'Status']],
-      body: reportData.map(i => [i.date, i.time, i.name, i.phone, i.room, i.status]),
+      head: [['วันที่', 'เวลา', 'ชื่อ', 'เบอร์โทร', 'ห้อง', 'สถานะ']],
+      body: reportData.map(i => [i.date, i.time, i.name, i.phone, i.room, i.status === 'occupied' ? 'มีผู้เช่า' : 'ว่าง']),
       startY: 35, theme: 'grid', headStyles: { fillColor: [15, 23, 42] }, styles: { fontSize: 9 },
     });
-    doc.save(`resort_report_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`รายงานผู้เช่า_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   if (loading) {
@@ -227,17 +226,17 @@ export default function ResortApp() {
   }
 
   // ============================================================
-  // RENDER
+  // แสดงผล
   // ============================================================
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* ===== SIDEBAR ===== */}
+      {/* ===== แถบด้านข้าง ===== */}
       <motion.aside
         initial={false}
         animate={{ width: isSidebarOpen ? 260 : 72 }}
         className="bg-slate-900 text-white flex flex-col overflow-hidden relative"
       >
-        {/* Logo */}
+        {/* โลโก้ */}
         <div className="flex items-center gap-3 px-5 py-6 border-b border-slate-800">
           <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
             <Home size={20} />
@@ -246,16 +245,16 @@ export default function ResortApp() {
             {isSidebarOpen && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <h1 className="font-bold text-base">รีสอร์ท สวีท</h1>
-                <p className="text-xs text-slate-400">Management</p>
+                <p className="text-xs text-slate-400">ระบบจัดการ</p>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Nav */}
+        {/* เมนูหลัก */}
         <nav className="flex-1 p-3 space-y-1">
           {[
-            { key: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard, color: 'bg-indigo-600' },
+            { key: 'dashboard', label: 'ภาพรวม', icon: LayoutDashboard, color: 'bg-indigo-600' },
             { key: 'rooms', label: 'ห้องพัก', icon: Home, color: 'bg-pink-600' },
             { key: 'tenants', label: 'ผู้เช่า', icon: Users, color: 'bg-amber-600' },
             { key: 'reports', label: 'รายงาน', icon: FileText, color: 'bg-emerald-600' },
@@ -273,7 +272,7 @@ export default function ResortApp() {
           ))}
         </nav>
 
-        {/* Toggle + Logout */}
+        {/* ย่อ/ขยาย + ออกจากระบบ */}
         <div className="p-3 border-t border-slate-800 space-y-1">
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 text-slate-400 transition-all">
             <Menu size={20} className="flex-shrink-0" />
@@ -281,14 +280,14 @@ export default function ResortApp() {
           </button>
           <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 transition-all">
             <LogOut size={20} className="flex-shrink-0" />
-            {isSidebarOpen && <span className="text-sm font-medium">ออก</span>}
+            {isSidebarOpen && <span className="text-sm font-medium">ออกจากระบบ</span>}
           </button>
         </div>
       </motion.aside>
 
-      {/* ===== MAIN ===== */}
+      {/* ===== ส่วนหลัก ===== */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
+        {/* แถบบนสุด */}
         <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900">
@@ -302,7 +301,7 @@ export default function ResortApp() {
               {activeTab === 'dashboard' && 'สรุปข้อมูลภาพรวมวันนี้'}
               {activeTab === 'rooms' && 'สถานะห้องพักทั้งหมด'}
               {activeTab === 'tenants' && 'รายชื่อผู้เช่าทั้งหมด'}
-              {activeTab === 'reports' && 'รายงานและส่งออก'}
+              {activeTab === 'reports' && 'รายงานและส่งออกข้อมูล'}
               {activeTab === 'settings' && 'จัดการการตั้งค่าระบบ'}
             </p>
           </div>
@@ -312,7 +311,7 @@ export default function ResortApp() {
               <input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="ค้นหา..."
+                placeholder="ค้นหาชื่อหรือห้องพัก..."
                 className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               />
             </div>
@@ -321,34 +320,34 @@ export default function ResortApp() {
               <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />
             </button>
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-              <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xs font-bold">AD</div>
+              <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xs font-bold">แอด</div>
               <div className="hidden sm:block">
-                <p className="text-sm font-semibold text-gray-900">Admin</p>
-                <p className="text-xs text-gray-400">Super</p>
+                <p className="text-sm font-semibold text-gray-900">ผู้ดูแลระบบ</p>
+                <p className="text-xs text-gray-400">สิทธิ์เต็ม</p>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Content */}
+        {/* เนื้อหา */}
         <main className="flex-1 overflow-y-auto p-6">
-          {/* ===== DASHBOARD ===== */}
+          {/* ===== ภาพรวม ===== */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* Stat Cards */}
+              {/* การ์ดสถิติ */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'ห้องพักทั้งหมด', value: stats.totalRooms, icon: Home, color: 'from-blue-500 to-blue-600', bgLight: 'bg-blue-50' },
-                  { label: 'มีผู้เช่า', value: stats.occupied, icon: CheckCircle, color: 'from-emerald-500 to-emerald-600', bgLight: 'bg-emerald-50' },
-                  { label: 'ห้องว่าง', value: stats.available, icon: TrendingUp, color: 'from-amber-500 to-amber-600', bgLight: 'bg-amber-50' },
-                  { label: 'รายได้รวม', value: `฿${(stats.revenue / 1000).toFixed(1)}k`, icon: CreditCard, color: 'from-purple-500 to-purple-600', bgLight: 'bg-purple-50' },
-                ].map(({ label, value, icon: Icon, color, bgLight }) => (
+                  { label: 'ห้องพักทั้งหมด', value: stats.totalRooms, icon: Home, color: 'from-blue-500 to-blue-600' },
+                  { label: 'มีผู้เช่า', value: stats.occupied, icon: CheckCircle, color: 'from-emerald-500 to-emerald-600' },
+                  { label: 'ห้องว่าง', value: stats.available, icon: TrendingUp, color: 'from-amber-500 to-amber-600' },
+                  { label: 'รายได้รวม', value: `฿${(stats.revenue / 1000).toFixed(1)}k`, icon: CreditCard, color: 'from-purple-500 to-purple-600' },
+                ].map(({ label, value, icon: Icon, color }) => (
                   <div key={label} className="bg-white rounded-2xl border border-gray-200 p-5">
                     <div className="flex items-center justify-between mb-3">
                       <span className={`w-10 h-10 bg-gradient-to-br ${color} rounded-xl flex items-center justify-center text-white shadow-lg`}>
                         <Icon size={18} />
                       </span>
-                      <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg">Live</span>
+                      <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg">เรียลไทม์</span>
                     </div>
                     <p className="text-2xl font-bold text-gray-900">{value}</p>
                     <p className="text-sm text-gray-500 mt-1">{label}</p>
@@ -357,7 +356,7 @@ export default function ResortApp() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Occupancy Chart Placeholder */}
+                {/* กราฟอัตราการเข้าพัก */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6">
                   <h3 className="font-bold text-gray-900 mb-4">อัตราการเข้าพัก</h3>
                   <div className="flex items-center justify-center mb-4">
@@ -368,7 +367,7 @@ export default function ResortApp() {
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <span className="text-3xl font-bold text-gray-900">{Math.round((stats.occupied / stats.totalRooms) * 100)}%</span>
-                        <span className="text-xs text-gray-400">Occupied</span>
+                        <span className="text-xs text-gray-400">เข้าพัก</span>
                       </div>
                     </div>
                   </div>
@@ -378,7 +377,7 @@ export default function ResortApp() {
                   </div>
                 </div>
 
-                {/* Recent Tenants */}
+                {/* ผู้เช่าล่าสุด */}
                 <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -399,7 +398,7 @@ export default function ResortApp() {
                             <p className="text-xs text-gray-400">{item.room} • {item.time} น.</p>
                           </div>
                         </div>
-                        <span className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg font-medium">Checked in</span>
+                        <span className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg font-medium">เช็คอินแล้ว</span>
                       </div>
                     ))}
                   </div>
@@ -408,14 +407,14 @@ export default function ResortApp() {
             </div>
           )}
 
-          {/* ===== ROOMS ===== */}
+          {/* ===== ห้องพัก ===== */}
           {activeTab === 'rooms' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium">ทั้งหมด</button>
-                  <button className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm">Standard</button>
-                  <button className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm">Deluxe</button>
+                  <button className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm">สแตนดาร์ด</button>
+                  <button className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm">ดีลักซ์</button>
                 </div>
                 <button onClick={() => { setEditingTenant(null); setFormData({ name: '', phone: '', room: '', date: new Date().toISOString().split('T')[0] }); setIsCheckInModalOpen(true); }} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors">
                   <Plus size={16} /> เช็คอิน
@@ -444,7 +443,7 @@ export default function ResortApp() {
             </div>
           )}
 
-          {/* ===== TENANTS ===== */}
+          {/* ===== ผู้เช่า ===== */}
           {activeTab === 'tenants' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -458,11 +457,11 @@ export default function ResortApp() {
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">วันที่เข้าพัก</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">ชื่อ-นามสกุล</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">ห้อง</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">เบอร์โทร</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">จัดการ</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">วันที่เข้าพัก</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">ชื่อ-นามสกุล</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">ห้อง</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">เบอร์โทร</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">จัดการ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -473,9 +472,11 @@ export default function ResortApp() {
                             <p className="text-xs text-gray-400">{item.time} น.</p>
                           </td>
                           <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 justify-end">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">{item.name}</p>
+                              </div>
                               <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-sm font-bold">{item.name.charAt(0)}</div>
-                              <p className="text-sm font-semibold text-gray-900">{item.name}</p>
                             </div>
                           </td>
                           <td className="px-5 py-4">
@@ -485,7 +486,7 @@ export default function ResortApp() {
                             <p className="text-sm text-gray-600">{item.phone}</p>
                           </td>
                           <td className="px-5 py-4">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 justify-end">
                               <button onClick={() => { setEditingTenant(item); setIsCheckInModalOpen(true); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="แก้ไข">
                                 <Edit3 size={16} />
                               </button>
@@ -509,10 +510,10 @@ export default function ResortApp() {
             </div>
           )}
 
-          {/* ===== REPORTS ===== */}
+          {/* ===== รายงาน ===== */}
           {activeTab === 'reports' && (
             <div className="space-y-6">
-              {/* Summary */}
+              {/* สรุป */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-5 text-white">
                   <p className="text-sm text-indigo-100 mb-1">จำนวนรายการ</p>
@@ -528,9 +529,9 @@ export default function ResortApp() {
                 </div>
               </div>
 
-              {/* Filters */}
+              {/* ตัวกรอง */}
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h3 className="font-bold text-gray-900 mb-4">ตัวกรอง</h3>
+                <h3 className="font-bold text-gray-900 mb-4">ตัวกรองข้อมูล</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">เริ่มวันที่</label>
@@ -544,8 +545,8 @@ export default function ResortApp() {
                     <label className="text-xs text-gray-400 mb-1 block">ประเภทห้อง</label>
                     <select value={reportFilters.roomType} onChange={e => setReportFilters({ ...reportFilters, roomType: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
                       <option value="all">ทั้งหมด</option>
-                      <option value="Standard">Standard</option>
-                      <option value="Deluxe">Deluxe</option>
+                      <option value="สแตนดาร์ด">สแตนดาร์ด</option>
+                      <option value="ดีลักซ์">ดีลักซ์</option>
                     </select>
                   </div>
                   <div>
@@ -559,7 +560,7 @@ export default function ResortApp() {
                 </div>
               </div>
 
-              {/* Export */}
+              {/* ส่งออก */}
               <div className="flex flex-wrap gap-3">
                 <button onClick={exportToCSV} className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium flex items-center gap-2 hover:bg-gray-50">
                   <Download size={16} /> ส่งออก CSV
@@ -569,7 +570,7 @@ export default function ResortApp() {
                 </button>
               </div>
 
-              {/* Table */}
+              {/* ตารางข้อมูล */}
               <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100">
                   <p className="text-sm text-gray-400">พบ {reportData.length} รายการ</p>
@@ -578,10 +579,10 @@ export default function ResortApp() {
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">วันที่</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">ชื่อ</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">ห้อง</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">สถานะ</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">วันที่</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">ชื่อ</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">ห้อง</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500">สถานะ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -604,17 +605,17 @@ export default function ResortApp() {
             </div>
           )}
 
-          {/* ===== SETTINGS ===== */}
+          {/* ===== ตั้งค่า ===== */}
           {activeTab === 'settings' && (
             <div className="space-y-6 max-w-2xl">
-              {/* API Connection */}
+              {/* เชื่อมต่อ API */}
               <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center text-white">
                     <TrendingUp size={18} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900">เชื่อมต่อ API Backend</h3>
+                    <h3 className="font-bold text-gray-900">เชื่อมต่อระบบหลังบ้าน</h3>
                     <p className="text-sm text-gray-400">URL ของ FastAPI backend</p>
                   </div>
                 </div>
@@ -631,11 +632,11 @@ export default function ResortApp() {
                 </div>
                 <div className="flex items-center gap-2 mt-3">
                   <span className={`w-2.5 h-2.5 rounded-full ${apiConnected ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                  <span className="text-sm text-gray-500">{apiConnected ? 'เชื่อมต่อสำเร็จ' : 'ยังไม่เชื่อมต่อ'}</span>
+                  <span className="text-sm text-gray-500">{apiConnected ? 'เชื่อมต่อสำเร็จ' : 'ยังไม่เชื่อมต่อ — ตรวจสอบ URL'}</span>
                 </div>
               </div>
 
-              {/* Info */}
+              {/* เกี่ยวกับ */}
               <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center text-white">
@@ -647,21 +648,21 @@ export default function ResortApp() {
                   </div>
                 </div>
                 <div className="space-y-2 text-sm text-gray-600">
-                  <p>Resort Manager <span className="font-medium">v1.0</span></p>
-                  <p>Frontend: Next.js + Capacitor + Android</p>
-                  <p>Backend: FastAPI + SQLAlchemy + SQLite</p>
+                  <p>ระบบจัดการรีสอร์ท <span className="font-medium">v1.0</span></p>
+                  <p>หน้าบ้าน: Next.js + Capacitor + Android</p>
+                  <p>หลังบ้าน: FastAPI + SQLAlchemy + SQLite</p>
                 </div>
               </div>
 
               <button onClick={() => setActiveTab('dashboard')} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors">
-                กลับหน้าแดชบอร์ด
+                กลับหน้าภาพรวม
               </button>
             </div>
           )}
         </main>
       </div>
 
-      {/* ===== MODAL ===== */}
+      {/* ===== ป๊อปอัพเช็คอิน/แก้ไข ===== */}
       <AnimatePresence>
         {isCheckInModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -681,7 +682,7 @@ export default function ResortApp() {
               <div className="p-6 space-y-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">ชื่อ-นามสกุล</label>
-                  <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="ชื่อ-นามสกุล" />
+                  <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="กรอกชื่อ-นามสกุล" />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">เบอร์โทรศัพท์</label>
