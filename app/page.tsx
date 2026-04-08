@@ -138,7 +138,6 @@ export default function ResortApp() {
           { id: 'B108', building: 'B1', type: 'Standard', price: 400, status_label: '' },
           { id: 'B109', building: 'B1', type: 'Standard', price: 400, status_label: '' },
           { id: 'B110', building: 'B1', type: 'Standard', price: 400, status_label: '' },
-          { id: 'B111', building: 'B1', type: 'Standard Twin', price: 500, status_label: '' },
           { id: 'B201', building: 'B2', type: 'Standard', price: 400, status_label: '' },
           { id: 'B202', building: 'B2', type: 'Standard', price: 400, status_label: '' },
           { id: 'B203', building: 'B2', type: 'Standard', price: 400, status_label: '' },
