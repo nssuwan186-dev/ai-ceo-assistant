@@ -22,14 +22,13 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts || npm install
+      - name: Install all dependencies
+        run: |
+          npm ci --ignore-scripts || npm install
+          npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Next.js static export
         run: npm run build
-
-      - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Setup Java
         uses: actions/setup-java@v4
