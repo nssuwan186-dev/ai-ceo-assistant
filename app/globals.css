@@ -1,1 +1,34 @@
 @import "tailwindcss";
+
+/* Safe Area สำหรับมือถือ (Notch, Home Indicator) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ป้องกันการซูมบน iOS */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* ปุ่มกดง่ายบนมือถือ */
+button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Scrollbar บาง */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 2px;
+}
+
+/* ป้องกัน Text Selection */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
