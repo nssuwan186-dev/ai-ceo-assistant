@@ -104,14 +104,59 @@ export default function ResortApp() {
 
   const ROOM_LIST = useMemo(() =>
     rooms.length > 0
-      ? rooms.map(r => ({ id: r.room_id, type: r.room_type, price: r.price }))
+      ? rooms.map(r => ({ id: r.room_id, building: r.building || '', type: r.room_type, price: r.price, status_label: r.status_label || '' }))
       : [
-          { id: 'A101', type: 'สแตนดาร์ด', price: 3500 }, { id: 'A102', type: 'สแตนดาร์ด', price: 3500 },
-          { id: 'A103', type: 'สแตนดาร์ด', price: 3500 }, { id: 'A104', type: 'สแตนดาร์ด', price: 3500 },
-          { id: 'B104', type: 'ดีลักซ์', price: 4500 }, { id: 'B106', type: 'ดีลักซ์', price: 4500 },
-          { id: 'B107', type: 'ดีลักซ์', price: 4500 }, { id: 'B108', type: 'ดีลักซ์', price: 4500 },
-          { id: 'B109', type: 'ดีลักซ์', price: 4500 }, { id: 'B110', type: 'ดีลักซ์', price: 4500 },
-          { id: 'N3', type: 'สแตนดาร์ด', price: 3000 },
+          { id: 'A101', building: 'A1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A102', building: 'A1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A103', building: 'A1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A104', building: 'A1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A105', building: 'A1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A106', building: 'A1', type: 'Standard Twin', price: 500, status_label: '' },
+          { id: 'A107', building: 'A1', type: 'Standard Twin', price: 500, status_label: '' },
+          { id: 'A108', building: 'A1', type: 'Standard Twin', price: 500, status_label: '' },
+          { id: 'A109', building: 'A1', type: 'Standard Twin', price: 500, status_label: '' },
+          { id: 'A110', building: 'A1', type: 'Standard Twin', price: 500, status_label: '' },
+          { id: 'A111', building: 'A1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A201', building: 'A2', type: 'Standard', price: 400, status_label: 'ปิดปรับปรุง' },
+          { id: 'A202', building: 'A2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A203', building: 'A2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A204', building: 'A2', type: 'Standard', price: 3500, status_label: 'รายเดือน' },
+          { id: 'A205', building: 'A2', type: 'Standard', price: 3500, status_label: 'รายเดือน' },
+          { id: 'A206', building: 'A2', type: 'Standard', price: 3500, status_label: 'รายเดือน' },
+          { id: 'A207', building: 'A2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A208', building: 'A2', type: 'Standard', price: 3500, status_label: 'รายเดือน' },
+          { id: 'A209', building: 'A2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A210', building: 'A2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'A211', building: 'A2', type: 'Standard', price: 3500, status_label: 'รายเดือน' },
+          { id: 'B101', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B102', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B103', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B104', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B105', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B106', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B107', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B108', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B109', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B110', building: 'B1', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B111', building: 'B1', type: 'Standard Twin', price: 500, status_label: '' },
+          { id: 'B201', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B202', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B203', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B204', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B205', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B206', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B207', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B208', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B209', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B210', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'B211', building: 'B2', type: 'Standard', price: 400, status_label: '' },
+          { id: 'N1', building: 'N1', type: 'Standard Twin', price: 600, status_label: '' },
+          { id: 'N2', building: 'N1', type: 'Standard', price: 500, status_label: '' },
+          { id: 'N3', building: 'N1', type: 'Standard', price: 500, status_label: '' },
+          { id: 'N4', building: 'N1', type: 'Standard Twin', price: 600, status_label: '' },
+          { id: 'N5', building: 'N1', type: 'Standard Twin', price: 600, status_label: '' },
+          { id: 'N6', building: 'N1', type: 'Standard Twin', price: 600, status_label: '' },
+          { id: 'N7', building: 'N1', type: 'Standard', price: 500, status_label: '' },
         ], [rooms]);
 
   const loadData = useCallback(async (search?: string) => {
@@ -414,30 +459,44 @@ export default function ResortApp() {
           {activeTab === 'rooms' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button className="px-4 py-2 bg-slate-700 text-white rounded-xl text-sm font-medium">ทั้งหมด</button>
-                  <button className="px-4 py-2 bg-white/60 backdrop-blur border border-gray-200 text-gray-600 rounded-xl text-sm">สแตนดาร์ด</button>
-                  <button className="px-4 py-2 bg-white/60 backdrop-blur border border-gray-200 text-gray-600 rounded-xl text-sm">ดีลักซ์</button>
+                  <button className="px-4 py-2 bg-white/60 backdrop-blur border border-gray-200 text-gray-600 rounded-xl text-sm">Standard</button>
+                  <button className="px-4 py-2 bg-white/60 backdrop-blur border border-gray-200 text-gray-600 rounded-xl text-sm">Standard Twin</button>
+                  <button className="px-4 py-2 bg-white/60 backdrop-blur border border-gray-200 text-gray-600 rounded-xl text-sm">รายเดือน</button>
                 </div>
                 <button onClick={() => { setEditingTenant(null); setFormData({ name: '', phone: '', room: '', date: new Date().toISOString().split('T')[0] }); setIsCheckInModalOpen(true); }} className="px-5 py-2.5 bg-slate-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 hover:bg-slate-800 transition-colors">
                   <Plus size={16} /> เช็คอิน
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {ROOM_LIST.map(room => {
                   const isOccupied = tenants.some(d => d.room === room.id);
+                  const isMaintenance = room.status_label === 'ปิดปรับปรุง';
+                  const isMonthly = room.status_label === 'รายเดือน';
                   return (
-                    <div key={room.id} className={`bg-[#f0f0f0]/80 backdrop-blur-xl rounded-2xl border p-5 transition-all hover:shadow-md ${isOccupied ? 'border-slate-300 bg-slate-100/50' : 'border-gray-200'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xl font-bold text-gray-900">{room.id}</span>
-                        <span className={`w-3 h-3 rounded-full ${isOccupied ? 'bg-slate-500' : 'bg-emerald-400'}`} />
+                    <div key={room.id} className={`bg-[#f0f0f0]/80 backdrop-blur-xl rounded-2xl border p-4 transition-all hover:shadow-md ${isMaintenance ? 'border-amber-300 bg-amber-50/50 opacity-60' : isOccupied ? 'border-slate-300 bg-slate-100/50' : 'border-gray-200'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-lg font-bold text-gray-900">{room.id}</span>
+                        <span className={`w-3 h-3 rounded-full ${isMaintenance ? 'bg-amber-400' : isOccupied ? 'bg-slate-500' : 'bg-emerald-400'}`} />
                       </div>
-                      <p className="text-sm text-gray-500 mb-2">{room.type}</p>
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm font-medium ${isOccupied ? 'text-slate-600' : 'text-emerald-600'}`}>
-                          {isOccupied ? 'มีผู้เช่า' : 'ว่าง'}
-                        </span>
-                        <span className="text-sm text-gray-400">฿{room.price.toLocaleString()}</span>
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-500">อาคาร {room.building}</p>
+                        <p className="text-xs text-gray-500">{room.type}</p>
+                        {isMaintenance && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-lg font-medium">ปิดปรับปรุง</span>
+                        )}
+                        {isMonthly && !isOccupied && (
+                          <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg font-medium">รายเดือน</span>
+                        )}
+                        {!isMaintenance && (
+                          <div className="flex items-center justify-between pt-1">
+                            <span className={`text-xs font-medium ${isOccupied ? 'text-slate-600' : 'text-emerald-600'}`}>
+                              {isOccupied ? 'มีผู้เช่า' : 'ว่าง'}
+                            </span>
+                            <span className="text-xs text-gray-400">฿{room.price.toLocaleString()}{isMonthly ? '/ด.' : '/คืน'}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
