@@ -22,12 +22,15 @@ jobs:
           node-version: 22
 
       - name: Install all dependencies
-        run: |
-          npm install
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install
 
       - name: Build Next.js static export
-        run: npm run build
+        run: |
+          echo "=== Running next build ==="
+          npm run build
+          echo "=== Checking output ==="
+          ls -la out/ | head -15
+          test -d out/ && test -f out/index.html || (echo "ERROR: Build did not produce output" && exit 1)
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -40,6 +43,9 @@ jobs:
         with:
           cmdline-tools-version: 11076708
           packages: platforms;android-34 build-tools;34.0.0
+
+      - name: Install Capacitor for Android build
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Add Android platform and sync assets
         run: |
