@@ -41,15 +41,13 @@ jobs:
           cmdline-tools-version: 11076708
           packages: platforms;android-34 build-tools;34.0.0
 
-      - name: Add Android platform and copy assets
+      - name: Add Android platform and sync assets
         run: |
           echo "=== Checking out/ directory ==="
           ls -la out/ | head -15
           rm -rf android
           npx cap add android
-          npx cap copy android
-          echo "=== After cap copy ==="
-          ls -la android/app/src/main/assets/public/ | head -10
+          npx cap sync android
 
       - name: Build APK
         run: |
