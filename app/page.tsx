@@ -1,84 +1,158 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  LayoutDashboard, 
-  Home, 
-  Users, 
-  FileText, 
-  Settings, 
-  Plus, 
-  Search, 
-  Bell, 
-  MoreVertical, 
-  ChevronRight,
-  LogOut,
-  UserPlus,
-  CreditCard,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Download,
-  FileSpreadsheet,
-  File as FileIcon
+import {
+  LayoutDashboard, Home, Users, FileText, Settings, Plus, Search, Bell,
+  MoreVertical, ChevronRight, LogOut, UserPlus, CreditCard, AlertCircle,
+  CheckCircle2, Clock, Download, FileSpreadsheet, File as FileIcon, Menu, X
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Data from the user's document
-const INITIAL_DATA = [
-  { id: '1', date: '25-9-69', time: '02.30', name: 'อาทิตย์', phone: '-', room: 'B109', status: 'occupied' },
-  { id: '2', date: '25-9-69', time: '02.30', name: 'ชาญชัย อ้นเครือ', phone: '099-892-8404', room: 'B108', status: 'occupied' },
-  { id: '3', date: '25-9-69', time: '00.00', name: 'ภิรมย์', phone: '098-228-0959', room: 'A101', status: 'occupied' },
-  { id: '4', date: '25-9-69', time: '20.00', name: 'วันชัย', phone: '-', room: 'B110', status: 'occupied' },
-  { id: '5', date: '25-9-69', time: '01.14', name: 'นายสินวิสุทธิ์ สังเวียน', phone: '088-519-922', room: 'B106', status: 'occupied' },
-  { id: '6', date: '25-9-69', time: '01.14', name: 'สินวิสุทธิ์', phone: '-', room: 'B107', status: 'occupied' },
-  { id: '7', date: '25-9-69', time: '01.90', name: 'กอ', phone: '-', room: 'N3', status: 'occupied' },
-  { id: '8', date: '25-9-69', time: '20.47', name: 'สุริณี แก้วประทุม', phone: '098-513-1345', room: 'A102', status: 'occupied' },
-  { id: '9', date: '25-9-69', time: '03.00', name: 'นิโรจ สีจันทร์', phone: '080-282-6524', room: 'B104', status: 'occupied' },
-];
+// ============================================================
+// API Configuration — แก้ URL นี้ให้ตรงกับ backend ของคุณ
+// ============================================================
+const DEFAULT_API_URL = 'https://your-api-domain.com';
 
-const ROOM_LIST = [
-  { id: 'A101', type: 'Standard', price: 3500 },
-  { id: 'A102', type: 'Standard', price: 3500 },
-  { id: 'A103', type: 'Standard', price: 3500 },
-  { id: 'A104', type: 'Standard', price: 3500 },
-  { id: 'B104', type: 'Deluxe', price: 4500 },
-  { id: 'B106', type: 'Deluxe', price: 4500 },
-  { id: 'B107', type: 'Deluxe', price: 4500 },
-  { id: 'B108', type: 'Deluxe', price: 4500 },
-  { id: 'B109', type: 'Deluxe', price: 4500 },
-  { id: 'B110', type: 'Deluxe', price: 4500 },
-  { id: 'N3', type: 'Standard', price: 3000 },
-];
+function getApiUrl(): string {
+  try {
+    return localStorage.getItem('resort_api_url') || process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  } catch {
+    return process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  }
+}
 
+// ============================================================
+// Types
+// ============================================================
+interface Tenant {
+  id: number;
+  name: string;
+  phone: string;
+  room: string;
+  date: string;
+  time: string;
+  status: string;
+}
+
+interface Room {
+  id: number;
+  room_id: string;
+  room_type: string;
+  price: number;
+  status: string;
+}
+
+// ============================================================
+// API Helpers
+// ============================================================
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = `${getApiUrl()}/api/v1${path}`;
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    ...options,
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+async function fetchTenants(search?: string): Promise<Tenant[]> {
+  const q = search ? `?search=${encodeURIComponent(search)}` : '';
+  const data = await apiFetch<{ items: Tenant[] }>(`/tenants/${q}`);
+  return data.items;
+}
+
+async function fetchRooms(): Promise<Room[]> {
+  const data = await apiFetch<{ items: Room[] }>('/rooms/');
+  return data.items;
+}
+
+async function createTenant(data: Omit<Tenant, 'id'>): Promise<Tenant> {
+  return apiFetch('/tenants/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async function updateTenant(id: number, data: Partial<Tenant>): Promise<Tenant> {
+  return apiFetch(`/tenants/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+async function deleteTenant(id: number): Promise<void> {
+  await apiFetch(`/tenants/${id}`, { method: 'DELETE' });
+}
+
+async function seedData(): Promise<void> {
+  await apiFetch('/tenants/seed', { method: 'POST' });
+  await apiFetch('/rooms/seed', { method: 'POST' });
+}
+
+// ============================================================
+// Main App
+// ============================================================
 export default function ResortApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
-  const [tenants, setTenants] = useState(INITIAL_DATA);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
-  const [editingTenant, setEditingTenant] = useState<any>(null);
+  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [reportFilters, setReportFilters] = useState({ startDate: '', endDate: '', roomType: 'all', status: 'all' });
+  const [formData, setFormData] = useState({ name: '', phone: '', room: '', date: new Date().toISOString().split('T')[0] });
+  const [apiUrlInput, setApiUrlInput] = useState(DEFAULT_API_URL);
+  const [apiConnected, setApiConnected] = useState(false);
 
-  // Report Filters
-  const [reportFilters, setReportFilters] = useState({
-    startDate: '',
-    endDate: '',
-    roomType: 'all',
-    status: 'all'
-  });
+  // Load data from API
+  const loadData = useCallback(async (search?: string) => {
+    try {
+      setLoading(true);
+      const [tenantsData, roomsData] = await Promise.all([
+        fetchTenants(search),
+        fetchRooms(),
+      ]);
+      setTenants(tenantsData);
+      setRooms(roomsData);
+      setApiConnected(true);
+    } catch (e) {
+      console.error('Failed to load data from API:', e);
+      setApiConnected(false);
+      // Fallback: try seeding then reload
+      try {
+        await seedData();
+        const [t, r] = await Promise.all([fetchTenants(search), fetchRooms()]);
+        setTenants(t);
+        setRooms(r);
+        setApiConnected(true);
+      } catch {
+        // Offline mode — use empty data
+        setTenants([]);
+        setRooms([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    room: '',
-    date: new Date().toISOString().split('T')[0]
-  });
+  useEffect(() => {
+    loadData();
+    try {
+      const saved = localStorage.getItem('resort_api_url');
+      if (saved) setApiUrlInput(saved);
+    } catch {}
+  }, [loadData]);
+
+  useEffect(() => {
+    loadData(searchQuery);
+  }, [searchQuery, loadData]);
 
   const filteredData = useMemo(() => {
-    return tenants.filter(item => 
+    return tenants.filter(item =>
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.room.toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -86,834 +160,467 @@ export default function ResortApp() {
 
   const reportData = useMemo(() => {
     return tenants.filter(item => {
-      const matchesRoomType = reportFilters.roomType === 'all' || 
-        ROOM_LIST.find(r => r.id === item.room)?.type === reportFilters.roomType;
+      const matchesRoomType = reportFilters.roomType === 'all' ||
+        rooms.find(r => r.room_id === item.room)?.room_type === reportFilters.roomType;
       const matchesStatus = reportFilters.status === 'all' || item.status === reportFilters.status;
-      // Date filtering logic would go here if dates were standard ISO
       return matchesRoomType && matchesStatus;
     });
-  }, [tenants, reportFilters]);
+  }, [tenants, reportFilters, rooms]);
 
   const stats = {
-    totalRooms: ROOM_LIST.length,
+    totalRooms: rooms.length || 11,
     occupied: tenants.length,
-    available: ROOM_LIST.length - tenants.length,
-    revenue: tenants.length * 4000 // Average
+    available: (rooms.length || 11) - tenants.length,
+    revenue: tenants.length * 4000,
   };
 
   const handleOpenAddModal = () => {
     setEditingTenant(null);
-    setFormData({
-      name: '',
-      phone: '',
-      room: '',
-      date: new Date().toISOString().split('T')[0]
-    });
+    setFormData({ name: '', phone: '', room: '', date: new Date().toISOString().split('T')[0] });
     setIsCheckInModalOpen(true);
   };
 
-  const handleOpenEditModal = (tenant: any) => {
+  const handleOpenEditModal = (tenant: Tenant) => {
     setEditingTenant(tenant);
-    setFormData({
-      name: tenant.name,
-      phone: tenant.phone,
-      room: tenant.room,
-      date: tenant.date
-    });
+    setFormData({ name: tenant.name, phone: tenant.phone, room: tenant.room, date: tenant.date });
     setIsCheckInModalOpen(true);
   };
 
-  const handleDeleteTenant = (id: string) => {
+  const handleDeleteTenant = async (id: number) => {
     if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลผู้เช่านี้?')) {
-      setTenants(prev => prev.filter(t => t.id !== id));
+      try {
+        await deleteTenant(id);
+        loadData(searchQuery);
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+      }
     }
   };
 
-  const handleSaveTenant = () => {
+  const handleSaveTenant = async () => {
     if (!formData.name || !formData.room) {
       alert('กรุณากรอกชื่อและเลือกห้องพัก');
       return;
     }
-
-    if (editingTenant) {
-      setTenants(prev => prev.map(t => t.id === editingTenant.id ? { ...t, ...formData } : t));
-    } else {
-      const newTenant = {
-        id: Math.random().toString(36).substr(2, 9),
-        ...formData,
-        time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-        status: 'occupied'
-      };
-      setTenants(prev => [...prev, newTenant]);
+    try {
+      const now = new Date();
+      if (editingTenant) {
+        await updateTenant(editingTenant.id, { ...formData, time: now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) });
+      } else {
+        await createTenant({
+          ...formData,
+          time: now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          status: 'occupied',
+        });
+      }
+      loadData(searchQuery);
+      setIsCheckInModalOpen(false);
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     }
-    setIsCheckInModalOpen(false);
+  };
+
+  const handleSaveApiUrl = () => {
+    try {
+      localStorage.setItem('resort_api_url', apiUrlInput);
+      alert('บันทึก URL สำเร็จ — กำลังโหลดใหม่...');
+      window.location.reload();
+    } catch {
+      alert('ไม่สามารถบันทึก URL ได้');
+    }
   };
 
   const exportToCSV = () => {
-    const dataToExport = reportData;
     const headers = ['Date', 'Time', 'Name', 'Phone', 'Room', 'Status'];
-    const rows = dataToExport.map(item => [
-      item.date,
-      item.time,
-      item.name,
-      item.phone,
-      item.room,
-      item.status
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
+    const rows = reportData.map(item => [item.date, item.time, item.name, item.phone, item.room, item.status]);
+    const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
+    link.setAttribute('href', URL.createObjectURL(blob));
     link.setAttribute('download', `resort_report_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
   };
 
   const exportToPDF = () => {
-    const dataToExport = reportData;
     const doc = new jsPDF();
-    
     doc.setFontSize(18);
     doc.text('Resort Suite Manager - Tenant Report', 14, 22);
-    
     doc.setFontSize(11);
     doc.setTextColor(100);
     doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
-    doc.text(`Filters: Room Type: ${reportFilters.roomType}, Status: ${reportFilters.status}`, 14, 36);
-
-    const tableColumn = ['Date', 'Time', 'Name', 'Phone', 'Room', 'Status'];
-    const tableRows = dataToExport.map(item => [
-      item.date,
-      item.time,
-      item.name,
-      item.phone,
-      item.room,
-      item.status
-    ]);
-
     autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
+      head: [['Date', 'Time', 'Name', 'Phone', 'Room', 'Status']],
+      body: reportData.map(item => [item.date, item.time, item.name, item.phone, item.room, item.status]),
       startY: 45,
       theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42] }, // Slate-900
-      styles: { fontSize: 9 }
+      headStyles: { fillColor: [15, 23, 42] },
+      styles: { fontSize: 9 },
     });
-
     doc.save(`resort_report_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  return (
-    <div className="flex h-screen bg-[#FDFCFB] text-slate-900 font-sans selection:bg-rose-100 selection:text-rose-900 overflow-hidden relative">
-      {/* Mobile Sidebar Overlay */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
-          />
-        )}
-      </AnimatePresence>
+  const ROOM_LIST: { id: string; type: string; price: number }[] =
+    rooms.length > 0
+      ? rooms.map(r => ({ id: r.room_id, type: r.room_type, price: r.price }))
+      : [
+          { id: 'A101', type: 'Standard', price: 3500 }, { id: 'A102', type: 'Standard', price: 3500 },
+          { id: 'A103', type: 'Standard', price: 3500 }, { id: 'A104', type: 'Standard', price: 3500 },
+          { id: 'B104', type: 'Deluxe', price: 4500 }, { id: 'B106', type: 'Deluxe', price: 4500 },
+          { id: 'B107', type: 'Deluxe', price: 4500 }, { id: 'B108', type: 'Deluxe', price: 4500 },
+          { id: 'B109', type: 'Deluxe', price: 4500 }, { id: 'B110', type: 'Deluxe', price: 4500 },
+          { id: 'N3', type: 'Standard', price: 3000 },
+        ];
 
-      {/* Sidebar - Compact & Minimalist */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 lg:relative lg:flex
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        w-64 lg:w-24 bg-white border-r border-slate-100 flex flex-col shrink-0 transition-all duration-300 lg:hover:w-64 group/sidebar shadow-sm
-      `}>
-        <div className="p-6 flex flex-col items-center lg:group-hover/sidebar:items-start transition-all">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-rose-100 rounded-[20px] flex items-center justify-center text-rose-500 shadow-[0_4px_0_0_#FFE4E6] active:translate-y-[2px] active:shadow-[0_2px_0_0_#FFE4E6] transition-all">
-              <Home size={24} strokeWidth={2.5} />
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-500 font-medium">กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-800">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] lg:hidden" />
+      )}
+
+      {/* Sidebar */}
+      <motion.aside
+        initial={{ x: -280 }} animate={{ x: isSidebarOpen ? 0 : -280 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="fixed lg:static inset-y-0 left-0 z-[70] w-[280px] lg:w-[80px] bg-white border-r border-slate-100 shadow-sm flex flex-col overflow-hidden"
+      >
+        <div className="p-5 flex items-center justify-between border-b border-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-sky-500/20">
+              <Home size={20} />
             </div>
-            <div className="lg:hidden lg:group-hover/sidebar:block opacity-100 lg:opacity-0 lg:group-hover/sidebar:opacity-100 transition-all duration-500">
-              <h1 className="font-black text-slate-900 leading-tight whitespace-nowrap">รีสอร์ท สวีท</h1>
-              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Management</p>
+            <div>
+              <h1 className="font-bold text-base text-slate-900">รีสอร์ท สวีท</h1>
+              <p className="text-xs text-slate-400">Management</p>
             </div>
           </div>
+          {isSidebarOpen && (
+            <button onClick={() => setIsSidebarOpen(false)} className="absolute top-2 right-2 p-1.5 lg:hidden text-slate-400 hover:text-rose-500 transition-colors">
+              <X size={16} />
+            </button>
+          )}
         </div>
 
-        <nav className="flex-1 px-4 py-8 space-y-4 overflow-y-auto scrollbar-hide">
-          <NavItem 
-            icon={<LayoutDashboard size={22} />} 
-            label="แดชบอร์ด" 
-            active={activeTab === 'dashboard'} 
-            onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} 
-            color="sky"
-          />
-          <NavItem 
-            icon={<Home size={22} />} 
-            label="จัดการห้องพัก" 
-            active={activeTab === 'rooms'} 
-            onClick={() => { setActiveTab('rooms'); setIsSidebarOpen(false); }} 
-            color="rose"
-          />
-          <NavItem 
-            icon={<Users size={22} />} 
-            label="ผู้เช่า" 
-            active={activeTab === 'tenants'} 
-            onClick={() => { setActiveTab('tenants'); setIsSidebarOpen(false); }} 
-            color="amber"
-          />
-          <NavItem 
-            icon={<FileText size={22} />} 
-            label="รายงาน" 
-            active={activeTab === 'reports'} 
-            onClick={() => { setActiveTab('reports'); setIsSidebarOpen(false); }} 
-            color="emerald"
-          />
-          <NavItem 
-            icon={<Settings size={22} />} 
-            label="ตั้งค่า" 
-            active={activeTab === 'settings'} 
-            onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }} 
-            color="indigo"
-          />
+        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
+          <NavItem icon={<LayoutDashboard size={18} />} label="แดชบอร์ด" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} color="sky" isExpanded={isSidebarOpen} />
+          <NavItem icon={<Home size={18} />} label="จัดการห้องพัก" active={activeTab === 'rooms'} onClick={() => { setActiveTab('rooms'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} color="rose" isExpanded={isSidebarOpen} />
+          <NavItem icon={<Users size={18} />} label="ผู้เช่า" active={activeTab === 'tenants'} onClick={() => { setActiveTab('tenants'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} color="amber" isExpanded={isSidebarOpen} />
+          <NavItem icon={<FileText size={18} />} label="รายงาน" active={activeTab === 'reports'} onClick={() => { setActiveTab('reports'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} color="emerald" isExpanded={isSidebarOpen} />
+          <NavItem icon={<Settings size={18} />} label="ตั้งค่า" active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); if (window.innerWidth < 1024) setIsSidebarOpen(false); }} color="indigo" isExpanded={isSidebarOpen} />
         </nav>
 
-        <div className="p-4 border-t border-slate-50">
-          <button className="w-full flex items-center justify-center lg:group-hover/sidebar:justify-start gap-3 px-4 py-4 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-[20px] transition-all text-sm font-bold">
-            <LogOut size={20} />
-            <span className="lg:hidden lg:group-hover/sidebar:block">ออกจากระบบ</span>
+        <div className="p-3 border-t border-slate-50">
+          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-[18px] transition-all">
+            <LogOut size={18} />
+            {isSidebarOpen && <span className="font-medium text-sm">ออก</span>}
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#FDFCFB]">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-20 lg:h-24 bg-transparent flex items-center justify-between px-6 lg:px-10 shrink-0">
-          <div className="flex items-center gap-4 lg:gap-6 flex-1">
-            <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2.5 bg-white border border-slate-100 text-slate-400 rounded-xl shadow-sm"
-            >
-              <MoreVertical size={20} />
+        <header className="bg-white border-b border-slate-100 px-4 lg:px-6 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-2 bg-white border border-slate-100 text-slate-400 rounded-lg shadow-sm active:scale-95 transition-transform">
+              {isSidebarOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
-            <div className="relative w-full max-w-md hidden sm:block">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-              <input 
-                type="text" 
-                placeholder="ค้นหาชื่อผู้เช่า หรือ หมายเลขห้อง..." 
-                className="w-full pl-12 pr-6 py-3 bg-white border border-slate-100 rounded-[24px] text-sm focus:ring-4 focus:ring-slate-900/5 transition-all outline-none shadow-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ค้นหาชื่อหรือห้องพัก..." className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all" />
             </div>
           </div>
-          
-          <div className="flex items-center gap-3 lg:gap-6">
-            <button className="w-10 h-10 lg:w-12 lg:h-12 bg-white border border-slate-100 text-slate-400 hover:text-slate-900 rounded-[15px] lg:rounded-[20px] transition-all relative flex items-center justify-center shadow-sm hover:shadow-md active:translate-y-[2px] active:shadow-none">
-              <Bell size={20} />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+          <div className="flex items-center gap-3">
+            <button className="relative p-2 bg-white border border-slate-100 text-slate-400 rounded-xl shadow-sm hover:text-sky-500 transition-colors">
+              <Bell size={18} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full" />
             </button>
-            <div className="flex items-center gap-3 lg:gap-4 pl-2">
-              <div className="text-right hidden md:block">
-                <p className="text-sm font-black text-slate-900">Admin User</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Super Admin</p>
-              </div>
-              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-indigo-100 text-indigo-600 rounded-[15px] lg:rounded-[20px] flex items-center justify-center font-black text-sm shadow-[0_4px_0_0_#E0E7FF]">
-                AD
+            <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-100">
+              <div className="w-9 h-9 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center text-white text-xs font-bold shadow-md">AD</div>
+              <div className="hidden md:block">
+                <p className="text-sm font-semibold text-slate-800">Admin</p>
+                <p className="text-xs text-slate-400">Super</p>
               </div>
             </div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
-          <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && (
-              <motion.div
-                key="dashboard"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6 lg:space-y-8"
-              >
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-8">
-                  <StatCard 
-                    label="ห้องทั้งหมด" 
-                    value={stats.totalRooms} 
-                    icon={<Home size={22} />} 
-                    color="sky" 
-                    onClick={() => setActiveTab('rooms')}
-                  />
-                  <StatCard 
-                    label="มีผู้เช่า" 
-                    value={stats.occupied} 
-                    icon={<CheckCircle2 size={22} />} 
-                    color="rose" 
-                    onClick={() => setActiveTab('tenants')}
-                  />
-                  <StatCard 
-                    label="ห้องว่าง" 
-                    value={stats.available} 
-                    icon={<Plus size={22} />} 
-                    color="amber" 
-                    onClick={() => setActiveTab('rooms')}
-                  />
-                  <StatCard 
-                    label="รายได้" 
-                    value={`฿${(stats.revenue / 1000).toFixed(1)}k`} 
-                    icon={<CreditCard size={22} />} 
-                    color="emerald" 
-                    onClick={() => setActiveTab('reports')}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                  {/* Recent Check-ins */}
-                  <div className="lg:col-span-2 bg-white p-6 lg:p-10 rounded-[32px] lg:rounded-[40px] border border-slate-100 shadow-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 lg:mb-10">
-                      <div>
-                        <h3 className="text-xl lg:text-2xl font-black text-slate-900">การเช็คอินล่าสุด</h3>
-                        <p className="text-xs lg:text-sm text-slate-400 mt-1 font-medium">ผู้เช่าที่เข้าพักล่าสุดในระบบ</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={handleOpenAddModal}
-                          className="flex-1 sm:flex-none px-5 py-2.5 bg-slate-900 text-white rounded-[18px] font-bold text-xs lg:text-sm shadow-[0_4px_0_0_#1e293b] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-2"
-                        >
-                          <Plus size={16} />
-                          เช็คอิน
-                        </button>
-                        <button 
-                          onClick={() => setActiveTab('tenants')}
-                          className="w-10 h-10 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-[15px] flex items-center justify-center transition-all"
-                        >
-                          <ChevronRight size={18} />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {filteredData.slice(0, 4).map((item) => (
-                        <div 
-                          key={item.id} 
-                          onClick={() => handleOpenEditModal(item)}
-                          className="flex items-center justify-between p-4 bg-slate-50/50 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100 transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-500 font-black text-sm shadow-sm">
-                              {item.name.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-slate-900">{item.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.date} • {item.time}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg">
-                              {item.room}
-                            </span>
-                            <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-900 transition-colors" />
-                          </div>
-                        </div>
-                      ))}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Room Status Summary */}
+              <div className="bg-white rounded-3xl border border-slate-100 p-6">
+                <h2 className="font-bold text-lg mb-4">สถานะห้องพัก</h2>
+                <div className="flex items-center gap-8">
+                  <div className="relative w-32 h-32">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                      <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" strokeWidth="3" />
+                      <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#0ea5e9" strokeWidth="3" strokeDasharray={`${Math.round((stats.occupied / stats.totalRooms) * 100)}, 100`} />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-bold">{Math.round((stats.occupied / stats.totalRooms) * 100)}%</span>
+                      <span className="text-xs text-slate-400">ไม่ว่าง</span>
                     </div>
                   </div>
-
-                  {/* Room Status Summary */}
-                  <div className="bg-white p-6 lg:p-10 rounded-[32px] lg:rounded-[40px] border border-slate-100 shadow-sm flex flex-col">
-                    <h3 className="text-xl lg:text-2xl font-black text-slate-900 mb-6 lg:mb-8">สถานะห้องพัก</h3>
-                    
-                    <div className="flex-1 flex flex-col items-center justify-center space-y-8 lg:space-y-10">
-                      <div className="relative w-40 h-40 lg:w-56 lg:h-56">
-                        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                          <circle cx="50" cy="50" r="40" fill="transparent" stroke="#F1F5F9" strokeWidth="12" />
-                          <circle 
-                            cx="50" cy="50" r="40" fill="transparent" stroke="#F43F5E" strokeWidth="12" 
-                            strokeDasharray={`${(stats.occupied / stats.totalRooms) * 251.2} 251.2`}
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <p className="text-2xl lg:text-4xl font-black text-slate-900">{Math.round((stats.occupied / stats.totalRooms) * 100)}%</p>
-                          <p className="text-[8px] lg:text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Occupied</p>
-                        </div>
-                      </div>
-
-                      <div className="w-full grid grid-cols-2 gap-3 lg:gap-4">
-                        <div className="p-4 lg:p-5 bg-rose-50 rounded-[20px] lg:rounded-[24px] border border-rose-100/50">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
-                            <p className="text-[8px] lg:text-[10px] text-rose-400 font-bold uppercase tracking-widest">ไม่ว่าง</p>
-                          </div>
-                          <p className="text-xl lg:text-2xl font-black text-rose-600">{stats.occupied}</p>
-                        </div>
-                        <div className="p-4 lg:p-5 bg-slate-50 rounded-[20px] lg:rounded-[24px] border border-slate-100">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="w-1.5 h-1.5 bg-slate-300 rounded-full"></div>
-                            <p className="text-[8px] lg:text-[10px] text-slate-400 font-bold uppercase tracking-widest">ว่าง</p>
-                          </div>
-                          <p className="text-xl lg:text-2xl font-black text-slate-900">{stats.available}</p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <button 
-                      onClick={handleOpenAddModal}
-                      className="w-full mt-8 lg:mt-10 py-4 bg-slate-900 text-white rounded-[20px] lg:rounded-[24px] font-bold text-sm shadow-[0_6px_0_0_#1e293b] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus size={18} />
-                      เช็คอินใหม่
-                    </button>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3"><span className="w-3 h-3 bg-sky-500 rounded-full" /><span className="text-sm">ไม่ว่าง</span><span className="font-bold text-lg">{stats.occupied}</span></div>
+                    <div className="flex items-center gap-3"><span className="w-3 h-3 bg-slate-200 rounded-full" /><span className="text-sm">ว่าง</span><span className="font-bold text-lg">{stats.available}</span></div>
                   </div>
                 </div>
-              </motion.div>
-            )}
+              </div>
 
-            {activeTab === 'rooms' && (
-              <motion.div
-                key="rooms"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-8"
-              >
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-slate-900">จัดการห้องพักทั้งหมด</h2>
-                  <div className="flex gap-3">
-                    <button className="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">
-                      ตัวกรอง
-                    </button>
-                    <button className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all flex items-center gap-2">
-                      <Plus size={18} />
-                      เพิ่มห้องพัก
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-8">
-                  {ROOM_LIST.map((room) => {
-                    const isOccupied = tenants.some(d => d.room === room.id);
-                    return (
-                      <div key={room.id} className={`p-8 rounded-[32px] border transition-all group cursor-pointer relative overflow-hidden shadow-sm hover:shadow-md active:translate-y-[2px] active:shadow-none ${
-                        isOccupied 
-                          ? 'bg-white border-slate-100' 
-                          : 'bg-emerald-50 border-emerald-100'
-                      }`}>
-                        <div className={`absolute top-0 right-0 w-16 h-16 -mr-8 -mt-8 rotate-45 ${isOccupied ? 'bg-slate-50' : 'bg-emerald-100'}`}></div>
-                        <div className="relative z-10">
-                          <div className={`w-12 h-12 rounded-[18px] flex items-center justify-center mb-6 transition-all ${
-                            isOccupied ? 'bg-slate-100 text-slate-400' : 'bg-white text-emerald-500 shadow-[0_4px_0_0_#D1FAE5]'
-                          }`}>
-                            <Home size={24} />
-                          </div>
-                          <p className="text-2xl font-black text-slate-900">{room.id}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{room.type}</p>
-                          
-                          <div className="mt-6 flex items-center justify-between">
-                            <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${
-                              isOccupied ? 'bg-slate-100 text-slate-400' : 'bg-emerald-500 text-white shadow-[0_2px_0_0_#059669]'
-                            }`}>
-                              {isOccupied ? 'Occupied' : 'Available'}
-                            </span>
-                            <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-900 transition-colors" />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-            
-            {activeTab === 'tenants' && (
-              <motion.div
-                key="tenants"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-8"
-              >
-                <div className="flex items-center justify-between">
+              {/* Recent Check-ins */}
+              <div className="bg-white rounded-3xl border border-slate-100 p-6">
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">จัดการข้อมูลผู้เช่า</h2>
-                    <p className="text-sm text-slate-400 mt-1">ดู แก้ไข และลบข้อมูลผู้เช่าทั้งหมดในระบบ</p>
+                    <h2 className="font-bold text-lg">การเช็คอินล่าสุด</h2>
+                    <p className="text-sm text-slate-400">ผู้เช่าที่เข้าพักล่าสุด</p>
                   </div>
-                  <button 
-                    onClick={handleOpenAddModal}
-                    className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all flex items-center gap-2"
-                  >
-                    <UserPlus size={18} />
-                    เพิ่มผู้เช่าใหม่
+                  <button onClick={() => setActiveTab('tenants')} className="w-10 h-10 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-xl flex items-center justify-center transition-all">
+                    <ChevronRight size={18} />
                   </button>
                 </div>
-
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <div className="relative w-full max-w-xs">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                      <input 
-                        type="text" 
-                        placeholder="ค้นหาชื่อ หรือ ห้อง..." 
-                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-900/10 transition-all outline-none"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
+                <div className="space-y-2">
+                  {filteredData.slice(0, 4).map((item) => (
+                    <div key={item.id} onClick={() => handleOpenEditModal(item as Tenant)} className="flex items-center justify-between p-2 lg:p-3 bg-slate-50/50 hover:bg-slate-50 rounded-xl border border-transparent hover:border-slate-100 transition-all cursor-pointer group">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center font-bold text-sm">{item.name.charAt(0)}</div>
+                        <div>
+                          <p className="font-semibold text-sm">{item.name}</p>
+                          <p className="text-xs text-slate-400">{item.room} • {item.time}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs bg-sky-50 text-sky-600 px-2.5 py-1 rounded-lg font-medium">Checked in</span>
                     </div>
-                    <div className="flex gap-2">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center mr-2">แสดงผล {filteredData.length} รายการ</span>
-                    </div>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-slate-400 text-[11px] uppercase tracking-widest font-bold border-b border-slate-100">
-                          <th className="px-6 py-4 font-bold">วันที่เข้าพัก</th>
-                          <th className="px-6 py-4 font-bold">ชื่อ-นามสกุล</th>
-                          <th className="px-6 py-4 font-bold">ห้อง</th>
-                          <th className="px-6 py-4 font-bold">เบอร์โทรศัพท์</th>
-                          <th className="px-6 py-4 font-bold text-right">การจัดการ</th>
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard label="รายได้" value={`฿${(stats.revenue / 1000).toFixed(1)}k`} icon={<CreditCard size={18} />} color="sky" onClick={() => setActiveTab('reports')} />
+                <StatCard label="ผู้เช่า" value={stats.occupied} icon={<Users size={18} />} color="rose" onClick={() => setActiveTab('tenants')} />
+                <StatCard label="ห้องว่าง" value={stats.available} icon={<Home size={18} />} color="amber" onClick={() => setActiveTab('rooms')} />
+                <StatCard label="รายได้รวม" value={`฿${(stats.revenue / 1000).toFixed(1)}k`} icon={<FileSpreadsheet size={18} />} color="emerald" onClick={() => setActiveTab('reports')} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'rooms' && (
+            <div className="space-y-6">
+              <div><h2 className="font-bold text-2xl">จัดการห้องพักทั้งหมด</h2><p className="text-sm text-slate-400 mt-1">ดูสถานะของห้องพักทั้งหมด</p></div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2"><button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium">ทั้งหมด</button><button className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm">Standard</button><button className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm">Deluxe</button></div>
+                <button onClick={handleOpenAddModal} className="px-4 py-2 bg-sky-500 text-white rounded-xl text-sm font-medium flex items-center gap-2"><Plus size={16} /> เพิ่มห้องพัก</button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {ROOM_LIST.map((room) => {
+                  const isOccupied = tenants.some(d => d.room === room.id);
+                  return (
+                    <div key={room.id} className={`bg-white rounded-2xl border p-4 transition-all ${isOccupied ? 'border-rose-100 shadow-sm' : 'border-slate-100'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-bold text-lg">{room.id}</span>
+                        <span className={`w-2.5 h-2.5 rounded-full ${isOccupied ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                      </div>
+                      <p className="text-xs text-slate-400 mb-1">{room.type}</p>
+                      <p className={`text-sm font-medium ${isOccupied ? 'text-rose-600' : 'text-emerald-600'}`}>{isOccupied ? 'Occupied' : 'Available'}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'tenants' && (
+            <div className="space-y-6">
+              <div><h2 className="font-bold text-2xl">จัดการข้อมูลผู้เช่า</h2><p className="text-sm text-slate-400 mt-1">ดู แก้ไข และลบข้อมูลผู้เช่าทั้งหมด</p></div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-between">
+                <button onClick={handleOpenAddModal} className="px-5 py-2.5 bg-sky-500 text-white rounded-xl text-sm font-medium flex items-center gap-2 justify-center"><Plus size={16} /> เช็คอินใหม่</button>
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                  <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ค้นหาผู้เช่า..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" />
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">วันที่เข้าพัก</th><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">ชื่อ-นามสกุล</th><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">ห้อง</th><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">เบอร์โทรศัพท์</th><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">การจัดการ</th></tr></thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {filteredData.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-3"><p className="text-sm font-medium">{item.date}</p><p className="text-xs text-slate-400">{item.time} น.</p></td>
+                          <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 bg-sky-100 text-sky-600 rounded-lg flex items-center justify-center font-bold text-xs">{item.name.charAt(0)}</div><p className="text-sm font-semibold">{item.name}</p></div></td>
+                          <td className="px-4 py-3"><span className="text-sm font-medium bg-slate-100 px-2.5 py-1 rounded-lg">{item.room}</span></td>
+                          <td className="px-4 py-3"><p className="text-sm text-slate-600">{item.phone}</p></td>
+                          <td className="px-4 py-3"><div className="flex items-center gap-1">
+                            <button onClick={() => handleOpenEditModal(item as Tenant)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="แก้ไข">✏️</button>
+                            <button onClick={() => handleDeleteTenant(item.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="ลบ">🗑️</button>
+                          </div></td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {filteredData.map((item) => (
-                          <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                              <p className="text-sm font-bold text-slate-900">{item.date}</p>
-                              <p className="text-[10px] text-slate-400 font-medium">{item.time} น.</p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 font-bold text-sm">
-                                  {item.name.charAt(0)}
-                                </div>
-                                <p className="text-sm font-bold text-slate-900">{item.name}</p>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="px-3 py-1 bg-slate-900 text-white text-[11px] font-bold rounded-lg">
-                                {item.room}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-500 font-medium">
-                              {item.phone}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button 
-                                  onClick={() => handleOpenEditModal(item)}
-                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                  title="แก้ไข"
-                                >
-                                  <FileText size={18} />
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteTenant(item.id)}
-                                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                  title="ลบ"
-                                >
-                                  <AlertCircle size={18} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {filteredData.length === 0 && (
-                          <tr>
-                            <td colSpan={5} className="px-6 py-12 text-center">
-                              <p className="text-slate-400 text-sm">ไม่พบข้อมูลผู้เช่าที่ค้นหา</p>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </motion.div>
-            )}
+                {filteredData.length === 0 && (<div className="text-center py-12"><div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4"><Users size={24} className="text-slate-400" /></div><p className="text-slate-500 font-medium">ไม่พบข้อมูลผู้เช่าที่ค้นหา</p></div>)}
+              </div>
+            </div>
+          )}
 
-            {activeTab === 'reports' && (
-              <motion.div
-                key="reports"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6 lg:space-y-8"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl lg:text-2xl font-black text-slate-900">รายงานและการส่งออก</h2>
-                    <p className="text-xs lg:text-sm text-slate-400 mt-1 font-medium">กรองข้อมูลและส่งออกรายงานในรูปแบบต่างๆ</p>
-                  </div>
+          {activeTab === 'reports' && (
+            <div className="space-y-6">
+              {/* Summary Report */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-2xl p-5 text-white"><p className="text-sm text-sky-100 mb-1">จำนวนรายการ</p><p className="text-3xl font-bold">{reportData.length}</p></div>
+                <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl p-5 text-white"><p className="text-sm text-emerald-100 mb-1">รายได้รวม</p><p className="text-3xl font-bold">฿{(reportData.length * 4000 / 1000).toFixed(1)}k</p></div>
+                <div className="bg-white rounded-2xl border border-slate-100 p-5"><p className="text-sm text-slate-400 mb-1">วันที่ออกรายงาน</p><p className="text-xl font-bold">{new Date().toLocaleDateString('th-TH')}</p></div>
+              </div>
+
+              {/* Filters */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5">
+                <h3 className="font-bold text-base mb-4">ตัวกรองข้อมูล</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div><label className="text-xs text-slate-400 mb-1 block">เริ่มวันที่</label><input type="date" value={reportFilters.startDate} onChange={(e) => setReportFilters({ ...reportFilters, startDate: e.target.value })} className="w-full px-3 py-2 border border-slate-100 rounded-xl text-sm" /></div>
+                  <div><label className="text-xs text-slate-400 mb-1 block">ถึงวันที่</label><input type="date" value={reportFilters.endDate} onChange={(e) => setReportFilters({ ...reportFilters, endDate: e.target.value })} className="w-full px-3 py-2 border border-slate-100 rounded-xl text-sm" /></div>
+                  <div><label className="text-xs text-slate-400 mb-1 block">ประเภทห้อง</label><select value={reportFilters.roomType} onChange={(e) => setReportFilters({ ...reportFilters, roomType: e.target.value })} className="w-full px-3 py-2 border border-slate-100 rounded-xl text-sm"><option value="all">ทั้งหมด</option><option value="Standard">Standard</option><option value="Deluxe">Deluxe</option></select></div>
+                  <div><label className="text-xs text-slate-400 mb-1 block">สถานะ</label><select value={reportFilters.status} onChange={(e) => setReportFilters({ ...reportFilters, status: e.target.value })} className="w-full px-3 py-2 border border-slate-100 rounded-xl text-sm"><option value="all">ทั้งหมด</option><option value="occupied">มีผู้เช่า</option><option value="available">ว่าง</option></select></div>
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                  {/* Filters */}
-                  <div className="bg-white p-6 lg:p-8 rounded-[32px] lg:rounded-[40px] border border-slate-100 shadow-sm space-y-6">
-                    <h3 className="text-lg font-black text-slate-900">ตัวกรองข้อมูล</h3>
-                    
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ประเภทห้อง</label>
-                        <select 
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all appearance-none"
-                          value={reportFilters.roomType}
-                          onChange={(e) => setReportFilters({ ...reportFilters, roomType: e.target.value })}
-                        >
-                          <option value="all">ทั้งหมด</option>
-                          <option value="Standard">Standard</option>
-                          <option value="Deluxe">Deluxe</option>
-                        </select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">สถานะ</label>
-                        <select 
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all appearance-none"
-                          value={reportFilters.status}
-                          onChange={(e) => setReportFilters({ ...reportFilters, status: e.target.value })}
-                        >
-                          <option value="all">ทั้งหมด</option>
-                          <option value="occupied">มีผู้เช่า</option>
-                          <option value="available">ว่าง</option>
-                        </select>
-                      </div>
-                    </div>
+              {/* Export */}
+              <div className="flex flex-wrap gap-3">
+                <button onClick={exportToCSV} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-medium flex items-center gap-2 hover:bg-slate-50"><Download size={16} /> ส่งออก CSV</button>
+                <button onClick={exportToPDF} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-medium flex items-center gap-2 hover:bg-slate-800"><Download size={16} /> ส่งออก PDF</button>
+              </div>
 
-                    <div className="pt-4 border-t border-slate-50">
-                      <p className="text-xs text-slate-400 font-medium">พบข้อมูลที่ตรงตามเงื่อนไข: <span className="text-slate-900 font-black">{reportData.length} รายการ</span></p>
-                    </div>
-                  </div>
-
-                  {/* Export Options */}
-                  <div className="lg:col-span-2 space-y-6 lg:space-y-8">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <button 
-                        onClick={exportToCSV}
-                        className="flex flex-col items-center justify-center p-8 bg-white hover:bg-emerald-50 border border-slate-100 rounded-[32px] transition-all group shadow-sm hover:shadow-[0_8px_0_0_#D1FAE5] active:translate-y-[4px] active:shadow-none"
-                      >
-                        <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-[24px] flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform mb-4">
-                          <FileSpreadsheet size={32} />
-                        </div>
-                        <p className="font-black text-slate-900">ส่งออก CSV</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Excel / Sheets</p>
-                      </button>
-
-                      <button 
-                        onClick={exportToPDF}
-                        className="flex flex-col items-center justify-center p-8 bg-white hover:bg-rose-50 border border-slate-100 rounded-[32px] transition-all group shadow-sm hover:shadow-[0_8px_0_0_#FFE4E6] active:translate-y-[4px] active:shadow-none"
-                      >
-                        <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-[24px] flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform mb-4">
-                          <FileIcon size={32} />
-                        </div>
-                        <p className="font-black text-slate-900">ส่งออก PDF</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Print / Send</p>
-                      </button>
-                    </div>
-
-                    <div className="bg-slate-900 p-8 rounded-[32px] lg:rounded-[40px] text-white relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 -mr-16 -mt-16 rounded-full blur-3xl"></div>
-                      <h3 className="text-lg font-black mb-6 relative z-10">สรุปรายงาน</h3>
-                      <div className="grid grid-cols-2 gap-6 relative z-10">
-                        <div className="space-y-1">
-                          <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">จำนวนรายการ</p>
-                          <p className="text-3xl font-black">{reportData.length}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">วันที่ออกรายงาน</p>
-                          <p className="text-sm font-black">{new Date().toLocaleDateString('th-TH')}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              {/* Data Table */}
+              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-50"><p className="text-sm text-slate-400">พบ {reportData.length} รายการ</p></div>
+                <div className="overflow-x-auto">
+                  <table className="w-full"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">วันที่</th><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">ชื่อ</th><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">ห้อง</th><th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">สถานะ</th></tr></thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {reportData.map((item) => (<tr key={item.id} className="hover:bg-slate-50/50"><td className="px-4 py-3 text-sm">{item.date}</td><td className="px-4 py-3 text-sm font-medium">{item.name}</td><td className="px-4 py-3 text-sm">{item.room}</td><td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-lg font-medium ${item.status === 'occupied' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>{item.status}</span></td></tr>))}
+                    </tbody>
+                  </table>
                 </div>
-              </motion.div>
-            )}
-            
-            {/* Placeholder for other tabs */}
-            {['settings'].includes(activeTab) && (
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center h-[60vh] text-center"
-              >
-                <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 mb-6">
-                  <Clock size={40} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="space-y-6 max-w-2xl">
+              <div><h2 className="font-bold text-2xl">ตั้งค่า</h2><p className="text-sm text-slate-400 mt-1">จัดการการตั้งค่าระบบ</p></div>
+
+              {/* API Connection */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-6">
+                <h3 className="font-bold text-base mb-1">🌐 เชื่อมต่อ API Backend</h3>
+                <p className="text-sm text-slate-400 mb-4">URL ของ FastAPI backend ที่ให้บริการข้อมูล</p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    value={apiUrlInput}
+                    onChange={(e) => setApiUrlInput(e.target.value)}
+                    placeholder="https://your-api.com"
+                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  />
+                  <button onClick={handleSaveApiUrl} className="px-6 py-2.5 bg-sky-500 text-white rounded-xl text-sm font-medium hover:bg-sky-600 transition-colors">บันทึก URL</button>
                 </div>
-                <h3 className="text-xl font-bold text-slate-900">กำลังพัฒนาส่วนนี้</h3>
-                <p className="text-slate-400 mt-2 max-w-xs mx-auto">ส่วนการจัดการ {activeTab === 'settings' ? 'ตั้งค่า' : ''} กำลังอยู่ในระหว่างการปรับปรุงดีไซน์ใหม่</p>
-                <button 
-                  onClick={() => setActiveTab('dashboard')}
-                  className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all"
-                >
-                  กลับหน้าแดชบอร์ด
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </main>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className={`w-2.5 h-2.5 rounded-full ${apiConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                  <span className="text-sm text-slate-500">{apiConnected ? 'เชื่อมต่อสำเร็จ' : 'ยังไม่เชื่อมต่อ — ตรวจสอบ URL'}</span>
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-6">
+                <h3 className="font-bold text-base mb-1">ℹ️ เกี่ยวกับระบบ</h3>
+                <p className="text-sm text-slate-400">Resort Manager v1.0 — ระบบจัดการห้องพัก</p>
+                <p className="text-sm text-slate-400">Backend: FastAPI + SQLAlchemy</p>
+              </div>
+
+              <button onClick={() => setActiveTab('dashboard')} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all">กลับหน้าแดชบอร์ด</button>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* Check-in / Edit Modal */}
       <AnimatePresence>
         {isCheckInModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsCheckInModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-xl bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100"
-            >
-              <div className="p-10 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-                <div>
-                  <h3 className="text-3xl font-black text-slate-900">{editingTenant ? 'แก้ไขข้อมูล' : 'เช็คอินใหม่'}</h3>
-                  <p className="text-sm text-slate-400 mt-1 font-medium">{editingTenant ? 'แก้ไขรายละเอียดของผู้เช่าในระบบ' : 'กรอกข้อมูลผู้เช่าเพื่อบันทึกลงในระบบ'}</p>
-                </div>
-                <button 
-                  onClick={() => setIsCheckInModalOpen(false)}
-                  className="w-12 h-12 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-[20px] transition-all"
-                >
-                  <Plus size={28} className="rotate-45" />
-                </button>
-              </div>
-              
-              <div className="p-10 space-y-8">
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ชื่อ-นามสกุล</label>
-                    <input 
-                      type="text" 
-                      placeholder="ระบุชื่อผู้เช่า" 
-                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-[24px] text-sm outline-none focus:ring-4 focus:ring-rose-500/5 focus:bg-white transition-all font-bold" 
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+            <div onClick={() => setIsCheckInModalOpen(false)} className="absolute inset-0" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-[28px] shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="p-6 bg-gradient-to-br from-sky-500 to-blue-600">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{editingTenant ? 'แก้ไขข้อมูล' : 'เช็คอินใหม่'}</h2>
+                    <p className="text-sm text-sky-100 mt-1">{editingTenant ? 'แก้ไขรายละเอียดของผู้เช่าในระบบ' : 'กรอกข้อมูลผู้เช่าเพื่อบันทึกลงในระบบ'}</p>
                   </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">เบอร์โทรศัพท์</label>
-                    <input 
-                      type="text" 
-                      placeholder="08x-xxx-xxxx" 
-                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-[24px] text-sm outline-none focus:ring-4 focus:ring-rose-500/5 focus:bg-white transition-all font-bold" 
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">หมายเลขห้อง</label>
-                    <div className="relative">
-                      <select 
-                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-[24px] text-sm outline-none focus:ring-4 focus:ring-rose-500/5 focus:bg-white transition-all appearance-none font-bold"
-                        value={formData.room}
-                        onChange={(e) => setFormData({ ...formData, room: e.target.value })}
-                      >
-                        <option value="">เลือกห้องพัก</option>
-                        {ROOM_LIST.filter(r => editingTenant?.room === r.id || !tenants.some(d => d.room === r.id)).map(r => (
-                          <option key={r.id} value={r.id}>{r.id} - {r.type}</option>
-                        ))}
-                      </select>
-                      <ChevronRight size={18} className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">วันที่เช็คอิน</label>
-                    <input 
-                      type="date" 
-                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-[24px] text-sm outline-none focus:ring-4 focus:ring-rose-500/5 focus:bg-white transition-all font-bold" 
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-6">
-                  <button 
-                    onClick={handleSaveTenant}
-                    className="w-full py-5 bg-slate-900 text-white rounded-[28px] font-black text-sm shadow-[0_8px_0_0_#1e293b] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-3"
-                  >
-                    <CheckCircle2 size={20} />
-                    {editingTenant ? 'บันทึกการแก้ไข' : 'ยืนยันการเช็คอิน'}
-                  </button>
+                  <button onClick={() => setIsCheckInModalOpen(false)} className="w-12 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 rounded-[20px] transition-all"><X size={20} /></button>
                 </div>
               </div>
+              <div className="p-6 space-y-4">
+                <div><label className="text-sm font-medium text-slate-600 mb-1 block">ชื่อ-นามสกุล</label><input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" placeholder="ชื่อ-นามสกุล" /></div>
+                <div><label className="text-sm font-medium text-slate-600 mb-1 block">เบอร์โทรศัพท์</label><input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" placeholder="0xx-xxx-xxxx" /></div>
+                <div><label className="text-sm font-medium text-slate-600 mb-1 block">หมายเลขห้อง</label><select value={formData.room} onChange={(e) => setFormData({ ...formData, room: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500">
+                  <option value="">เลือกห้องพัก</option>
+                  {ROOM_LIST.filter(r => editingTenant?.room === r.id || !tenants.some(d => d.room === r.id)).map(r => (<option key={r.id} value={r.id}>{r.id} - {r.type}</option>))}
+                </select></div>
+                <div><label className="text-sm font-medium text-slate-600 mb-1 block">วันที่เช็คอิน</label><input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" /></div>
+              </div>
+              <div className="p-6 pt-0"><button onClick={handleSaveTenant} className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-[20px] font-bold text-sm shadow-lg shadow-sky-500/20 hover:shadow-xl hover:shadow-sky-500/30 active:scale-[0.98] transition-all">{editingTenant ? 'บันทึกการแก้ไข' : 'ยืนยันการเช็คอิน'}</button></div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
 }
 
-function NavItem({ icon, label, active, onClick, color = "sky" }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, color?: string }) {
+// ============================================================
+// NavItem Component
+// ============================================================
+function NavItem({ icon, label, active, onClick, color = "sky", isExpanded }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; color?: string; isExpanded?: boolean }) {
   const colors: Record<string, string> = {
-    sky: "bg-sky-50 text-sky-500 shadow-[0_6px_0_0_#E0F2FE] border-sky-100",
-    rose: "bg-rose-50 text-rose-500 shadow-[0_6px_0_0_#FFE4E6] border-rose-100",
-    amber: "bg-amber-50 text-amber-500 shadow-[0_6px_0_0_#FEF3C7] border-amber-100",
-    emerald: "bg-emerald-50 text-emerald-500 shadow-[0_6px_0_0_#D1FAE5] border-emerald-100",
-    indigo: "bg-indigo-50 text-indigo-500 shadow-[0_6px_0_0_#E0E7FF] border-indigo-100",
+    sky: "bg-sky-50 text-sky-500 shadow-[0_3px_0_0_#E0F2FE] border-sky-100",
+    rose: "bg-rose-50 text-rose-500 shadow-[0_3px_0_0_#FFE4E6] border-rose-100",
+    amber: "bg-amber-50 text-amber-500 shadow-[0_3px_0_0_#FEF3C7] border-amber-100",
+    emerald: "bg-emerald-50 text-emerald-500 shadow-[0_3px_0_0_#D1FAE5] border-emerald-100",
+    indigo: "bg-indigo-50 text-indigo-500 shadow-[0_3px_0_0_#E0E7FF] border-indigo-100",
   };
-
   return (
-    <button 
-      onClick={onClick}
-      className={`w-full flex items-center justify-center group-hover/sidebar:justify-start gap-4 px-4 py-4 rounded-[24px] text-left transition-all group relative ${
-        active 
-          ? `${colors[color]} font-black translate-y-[-4px] border` 
-          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-      } active:translate-y-[2px] active:shadow-none`}
-    >
-      <div className={`${active ? '' : 'text-slate-300 group-hover:text-slate-500'} transition-colors shrink-0`}>
-        {icon}
-      </div>
-      <span className="text-sm hidden group-hover/sidebar:block font-black whitespace-nowrap">{label}</span>
-      {active && (
-        <motion.div 
-          layoutId="active-nav"
-          className="ml-auto w-2.5 h-2.5 bg-current rounded-full hidden group-hover/sidebar:block shadow-sm"
-        />
-      )}
+    <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-[18px] border transition-all ${active ? `${colors[color]} shadow-sm font-semibold` : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>
+      {icon}
+      {isExpanded && <span className="text-sm">{label}</span>}
+      {!isExpanded && active && <span className="w-1.5 h-1.5 bg-current rounded-full ml-auto" />}
     </button>
   );
 }
 
-function StatCard({ label, value, icon, color = "sky", onClick }: { label: string, value: string | number, icon: React.ReactNode, color?: string, onClick?: () => void }) {
+// ============================================================
+// StatCard Component
+// ============================================================
+function StatCard({ label, value, icon, color = "sky", onClick }: { label: string; value: string | number; icon: React.ReactNode; color?: string; onClick?: () => void }) {
   const colors: Record<string, string> = {
-    sky: "bg-sky-50 text-sky-600 shadow-[0_8px_0_0_#E0F2FE] border-sky-100",
-    rose: "bg-rose-50 text-rose-600 shadow-[0_8px_0_0_#FFE4E6] border-rose-100",
-    amber: "bg-amber-50 text-amber-600 shadow-[0_8px_0_0_#FEF3C7] border-amber-100",
-    emerald: "bg-emerald-50 text-emerald-600 shadow-[0_8px_0_0_#D1FAE5] border-emerald-100",
+    sky: "bg-sky-50 text-sky-600 shadow-[0_4px_0_0_#E0F2FE] border-sky-100",
+    rose: "bg-rose-50 text-rose-600 shadow-[0_4px_0_0_#FFE4E6] border-rose-100",
+    amber: "bg-amber-50 text-amber-600 shadow-[0_4px_0_0_#FEF3C7] border-amber-100",
+    emerald: "bg-emerald-50 text-emerald-600 shadow-[0_4px_0_0_#D1FAE5] border-emerald-100",
   };
-
   return (
-    <div 
-      onClick={onClick}
-      className={`p-6 lg:p-10 rounded-[32px] lg:rounded-[48px] border transition-all group hover:translate-y-[-6px] active:translate-y-[2px] active:shadow-none cursor-pointer ${colors[color]}`}
-    >
-      <div className="flex items-center justify-between mb-4 lg:mb-8">
-        <div className="w-10 h-10 lg:w-16 lg:h-16 bg-white rounded-[15px] lg:rounded-[24px] flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-          {icon}
-        </div>
-        <div className="text-[8px] lg:text-[10px] font-black bg-white/50 px-2 lg:px-3 py-1 lg:py-1.5 rounded-full uppercase tracking-widest border border-white/50">Live</div>
-      </div>
-      <p className="text-current/60 text-[8px] lg:text-[10px] font-black uppercase tracking-widest ml-1">{label}</p>
-      <p className="text-xl lg:text-4xl font-black mt-1 lg:mt-2 text-slate-900">{value}</p>
+    <div onClick={onClick} className={`${colors[color]} border rounded-2xl p-4 cursor-pointer active:scale-[0.98] transition-transform`}>
+      <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-slate-400">{label}</span><span className="text-xs px-2 py-0.5 bg-white/70 rounded-md font-medium">Live</span></div>
+      <p className="text-2xl font-bold">{value}</p>
     </div>
   );
 }
