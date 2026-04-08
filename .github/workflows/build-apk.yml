@@ -28,6 +28,9 @@ jobs:
       - name: Build Next.js static export
         run: npm run build
 
+      - name: Install Capacitor
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
